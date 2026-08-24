@@ -1,20 +1,29 @@
 /* Fetches the current Premier League table and writes site/standings.json.
  *
- * To change who has which team, edit the ROSTERS below. Each entry is just a
- * piece of the club's name — "Leeds" is enough to match "Leeds United FC".
- * Use enough of the name to be unambiguous ("Manchester United", not "Manchester").
+ * EVERYTHING YOU MIGHT WANT TO CHANGE IS IN THE ROSTERS BLOCK BELOW.
+ *
+ *   name   — the short name shown above the big number
+ *   label  — the heading above that person's list of clubs
+ *   teams  — enough of each club's name to identify it
+ *
+ * Use straight quotes ("), not curly ones. If your phone keyboard changes
+ * them, turn off smart punctuation before editing.
  */
 
 const ROSTERS = {
   mine: {
-    label: "My five",
+    name: "Jeremy",
+    label: "Jeremy's five",
     teams: ["Arsenal", "Leeds", "Brighton", "Chelsea", "Manchester United"]
   },
   dads: {
+    name: "Dad",
     label: "Dad's five",
     teams: ["Manchester City", "Tottenham", "Liverpool", "Aston Villa", "Newcastle"]
   }
 };
+
+/* ================= nothing below here needs editing ================= */
 
 const fs = require("fs");
 const path = require("path");
@@ -73,13 +82,14 @@ async function main() {
     });
 
     sides[key] = {
+      name: roster.name,
       label: roster.label,
       teams,
       total: teams.reduce((sum, t) => sum + t.points, 0)
     };
   }
 
-  const season = data.competition && data.season ? data.season : data.season || {};
+  const season = data.season || {};
   const startYear = season.startDate ? season.startDate.slice(0, 4) : "";
   const endYear = season.endDate ? season.endDate.slice(2, 4) : "";
 
