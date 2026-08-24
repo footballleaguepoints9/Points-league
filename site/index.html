@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Points League — Jeremy vs Dad</title>
-<meta name="description" content="A running Premier League points contest between me and my dad.">
+<title>Points League</title>
+<meta name="description" content="A running Premier League points contest.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -46,6 +46,7 @@
   .who{
     font-family:"Barlow Condensed",Arial Narrow,sans-serif;
     text-transform:uppercase;letter-spacing:.1em;font-size:14px;font-weight:600;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .who.mine{color:var(--mine)}
   .who.dads{color:var(--dads)}
@@ -74,16 +75,17 @@
   @media (max-width:620px){.cols{grid-template-columns:1fr;gap:34px}}
 
   .colhead{
-    display:flex;justify-content:space-between;align-items:baseline;
+    display:flex;justify-content:space-between;align-items:baseline;gap:10px;
     border-bottom:2px solid var(--ink);padding-bottom:5px;
   }
   .colhead .name{
     font-family:"Barlow Condensed",Arial Narrow,sans-serif;
     text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:16px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .colhead .pts{
     font-family:"Barlow Condensed",Arial Narrow,sans-serif;
-    font-weight:700;font-size:20px;font-variant-numeric:tabular-nums;
+    font-weight:700;font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap;
   }
   table{width:100%;border-collapse:collapse}
   th{
@@ -114,12 +116,12 @@
   <div id="scoreboard" hidden>
     <div class="board">
       <div class="side">
-        <div class="who mine">Jeremy</div>
-        <div class="tally" id="jeremyTotal">0</div>
+        <div class="who mine" id="mineName">&nbsp;</div>
+        <div class="tally" id="mineTotal">0</div>
       </div>
-      <div class="dash">—</div>
+      <div class="dash">&mdash;</div>
       <div class="side right">
-        <div class="who dads">Dad</div>
+        <div class="who dads" id="dadsName">&nbsp;</div>
         <div class="tally" id="dadsTotal">0</div>
       </div>
     </div>
@@ -133,7 +135,7 @@
     <div class="cols">
       <section>
         <div class="colhead">
-          <span class="name" style="color:var(--mine)">Jeremy five</span>
+          <span class="name" id="mineLabel" style="color:var(--mine)">&nbsp;</span>
           <span class="pts" id="mineHeadPts">0 pts</span>
         </div>
         <table>
@@ -146,7 +148,7 @@
 
       <section>
         <div class="colhead">
-          <span class="name" style="color:var(--dads)">Dad's five</span>
+          <span class="name" id="dadsLabel" style="color:var(--dads)">&nbsp;</span>
           <span class="pts" id="dadsHeadPts">0 pts</span>
         </div>
         <table>
@@ -159,73 +161,95 @@
     </div>
 
     <footer>
-      Updated <b id="updated">—</b>. Refreshes every morning.
+      Updated <b id="updated">&mdash;</b>. Refreshes every morning.
       <div class="note" id="warnings"></div>
     </footer>
   </div>
 
-  <p class="status" id="status">Loading the table…</p>
+  <p class="status" id="status">Loading the table&hellip;</p>
 </div>
 
 <script>
-const statusEl = document.getElementById("status");
+var statusEl = document.getElementById("status");
+
+function text(id, value){
+  document.getElementById(id).textContent = value;
+}
 
 fetch("standings.json?t=" + Date.now())
-  .then(r => {
+  .then(function(r){
     if (!r.ok) throw new Error("standings.json is missing");
     return r.json();
   })
   .then(render)
-  .catch(() => {
+  .catch(function(err){
     statusEl.textContent =
-      "Couldn't load the table. Try again in a minute, or run the Publish scoreboard job from the Actions tab.";
+      "Couldn't load the table (" + err.message + "). Try again in a minute, " +
+      "or run the Publish scoreboard job from the Actions tab.";
   });
 
 function render(data){
-  const fmt = new Intl.DateTimeFormat(undefined, {
+  var fmt = new Intl.DateTimeFormat(undefined, {
     weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"
   });
 
-  document.getElementById("eyebrow").textContent =
+  text("eyebrow",
     "Premier League" + (data.season ? " " + data.season : "") +
-    (data.matchday ? " · Matchweek " + data.matchday : "");
+    (data.matchday ? " \u00B7 Matchweek " + data.matchday : ""));
 
-  ["mine","dads"].forEach(key => {
-    const side = data.sides[key];
-    const body = document.getElementById(key + "Rows");
+  ["mine","dads"].forEach(function(key){
+    var side = data.sides[key];
+    var body = document.getElementById(key + "Rows");
     body.innerHTML = "";
-    side.teams.forEach(team => {
-      const tr = document.createElement("tr");
-      const cells = team.inLeague === false
-        ? ["—","—","—","0"]
-        : [team.played, team.won, team.drawn, team.points];
-      tr.innerHTML =
-        '<td' + (team.inLeague === false ? ' class="missing"' : '') + '>' + team.club + '</td>' +
-        '<td>' + cells[0] + '</td><td>' + cells[1] + '</td><td>' + cells[2] + '</td>' +
-        '<td class="pts">' + cells[3] + '</td>';
+
+    side.teams.forEach(function(team){
+      var tr = document.createElement("tr");
+      var missing = team.inLeague === false;
+      var cells = missing ? ["\u2014","\u2014","\u2014","0"]
+                          : [team.played, team.won, team.drawn, team.points];
+
+      var nameCell = document.createElement("td");
+      nameCell.textContent = team.club;
+      if (missing) nameCell.className = "missing";
+      tr.appendChild(nameCell);
+
+      cells.slice(0,3).forEach(function(v){
+        var td = document.createElement("td");
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+
+      var ptsCell = document.createElement("td");
+      ptsCell.className = "pts";
+      ptsCell.textContent = cells[3];
+      tr.appendChild(ptsCell);
+
       body.appendChild(tr);
     });
-    document.getElementById(key + "Total").textContent = side.total;
-    document.getElementById(key + "HeadPts").textContent = side.total + " pts";
+
+    text(key + "Name", side.name || "");
+    text(key + "Label", side.label || "");
+    text(key + "Total", side.total);
+    text(key + "HeadPts", side.total + " pts");
   });
 
-  const mine = data.sides.mine.total;
-  const dads = data.sides.dads.total;
-  const grand = mine + dads;
-  const share = grand === 0 ? 50 : (mine / grand) * 100;
+  var mine = data.sides.mine.total;
+  var dads = data.sides.dads.total;
+  var grand = mine + dads;
+  var share = grand === 0 ? 50 : (mine / grand) * 100;
   document.getElementById("tugA").style.width = share + "%";
   document.getElementById("tugB").style.width = (100 - share) + "%";
 
-  const gap = Math.abs(mine - dads);
-  document.getElementById("leadNote").textContent = gap === 0
+  var gap = Math.abs(mine - dads);
+  var leader = mine > dads ? data.sides.mine.name : data.sides.dads.name;
+  text("leadNote", gap === 0
     ? "Level"
-    : (mine > dads ? "Me" : "Dad") + " ahead by " + gap + (gap === 1 ? " point" : " points");
+    : leader + " ahead by " + gap + (gap === 1 ? " point" : " points"));
 
-  document.getElementById("updated").textContent =
-    data.updated ? fmt.format(new Date(data.updated)) : "unknown";
+  text("updated", data.updated ? fmt.format(new Date(data.updated)) : "unknown");
 
   if (data.warnings && data.warnings.length) {
-    document.getElementById("warnings").textContent = data.warnings.join(" · ");
+    text("warnings", data.warnings.join(" \u00B7 "));
   }
 
   statusEl.hidden = true;
