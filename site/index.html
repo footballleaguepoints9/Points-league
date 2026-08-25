@@ -99,6 +99,41 @@
   .col-narrow{width:34px}
   .missing{color:var(--muted);font-style:italic}
 
+  /* ---- matchweek recaps ---- */
+  .recapwrap{margin-top:46px}
+  .secthead{
+    font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:16px;
+    margin:0 0 2px;border-bottom:2px solid var(--ink);padding-bottom:5px;
+  }
+  .sectnote{color:var(--muted);font-size:13px;margin:8px 0 18px}
+  .recap{
+    border-left:3px solid var(--line);
+    padding:12px 0 12px 14px;margin-bottom:6px;
+    border-bottom:1px solid var(--line);
+  }
+  .recap.mine{border-left-color:var(--mine)}
+  .recap.dads{border-left-color:var(--dads)}
+  .recap-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:5px}
+  .recap-club{
+    font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    text-transform:uppercase;letter-spacing:.09em;font-weight:700;font-size:15px;
+  }
+  .recap.mine .recap-club{color:var(--mine)}
+  .recap.dads .recap-club{color:var(--dads)}
+  .recap-fixture{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .recap-pts{
+    margin-left:auto;font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;color:var(--muted);
+  }
+  .recap-text{margin:0;font-size:14.5px;line-height:1.55}
+  .recap-link{
+    display:inline-block;margin-top:7px;font-size:13px;
+    color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);
+  }
+  .recap-link:hover,.recap-link:focus{border-bottom-color:var(--ink)}
+  .recap-link:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
   footer{margin-top:42px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
   footer b{color:var(--ink);font-weight:600}
   .note{margin-top:8px}
@@ -159,6 +194,12 @@
         </table>
       </section>
     </div>
+
+    <section class="recapwrap" id="recapWrap" hidden>
+      <h2 class="secthead" id="recapHead">The last matchweek</h2>
+      <p class="sectnote" id="recapNote">&nbsp;</p>
+      <div id="recapList"></div>
+    </section>
 
     <footer>
       Updated <b id="updated">&mdash;</b>. Refreshes every morning.
@@ -246,6 +287,8 @@ function render(data){
     ? "Level"
     : leader + " ahead by " + gap + (gap === 1 ? " point" : " points"));
 
+  renderRecap(data.recap);
+
   text("updated", data.updated ? fmt.format(new Date(data.updated)) : "unknown");
 
   if (data.warnings && data.warnings.length) {
@@ -254,6 +297,63 @@ function render(data){
 
   statusEl.hidden = true;
   document.getElementById("scoreboard").hidden = false;
+}
+
+function renderRecap(recap){
+  if (!recap || !recap.entries || !recap.entries.length) return;
+
+  var dayFmt = new Intl.DateTimeFormat(undefined, { weekday:"short", day:"numeric", month:"short" });
+  var list = document.getElementById("recapList");
+  list.innerHTML = "";
+
+  text("recapHead", "Matchweek " + recap.matchday);
+  text("recapNote", "What happened to the ten clubs. "
+    + (recap.hasReports ? "Follow a link for the full match report."
+                        : "Result summaries only."));
+
+  recap.entries.forEach(function(e){
+    var art = document.createElement("article");
+    art.className = "recap " + e.side;
+
+    var top = document.createElement("div");
+    top.className = "recap-top";
+
+    var club = document.createElement("span");
+    club.className = "recap-club";
+    club.textContent = e.club;
+    top.appendChild(club);
+
+    var fix = document.createElement("span");
+    fix.className = "recap-fixture";
+    fix.textContent = e.fixture + " \u00B7 " + dayFmt.format(new Date(e.date));
+    top.appendChild(fix);
+
+    var pts = document.createElement("span");
+    pts.className = "recap-pts";
+    pts.textContent = "+" + e.points;
+    top.appendChild(pts);
+
+    art.appendChild(top);
+
+    var p = document.createElement("p");
+    p.className = "recap-text";
+    p.textContent = e.summary;
+    art.appendChild(p);
+
+    if (e.reportUrl) {
+      var a = document.createElement("a");
+      a.className = "recap-link";
+      a.href = e.reportUrl;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "Match report \u2192";
+      art.appendChild(a);
+    }
+
+    list.appendChild(art);
+  });
+
+  document.getElementById("recapWrap").hidden = false;
 }
 </script>
 </body>
