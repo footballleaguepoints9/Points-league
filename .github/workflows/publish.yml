@@ -37,6 +37,7 @@ jobs:
       - name: Fetch the latest table
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          GUARDIAN_KEY: ${{ secrets.GUARDIAN_KEY }}
         run: node update.js
 
       - name: Prepare Pages
@@ -47,8 +48,7 @@ jobs:
         with:
           path: site
 
-       GUARDIAN_KEY: ${{ secrets.GUARDIAN_KEY }}   
-
       - name: Publish
         id: deploy
         uses: actions/deploy-pages@v4
+
