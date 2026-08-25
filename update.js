@@ -120,9 +120,21 @@ function mentions(report, team) {
   });
 }
 
-async function fetchReports(fromDate, toDate, warnings) {
+/* Warnings are shown on the page, so each distinct problem is reported once
+ * however many matchweeks hit it. */
+const seenWarnings = {};
+function warnOnce(warnings, message) {
+  if (seenWarnings[message]) return;
+  seenWarnings[message] = true;
+  warnings.push(message);
+}
+
+async function fetchReports(fromDate, toDate, warnings, week) {
+  const tag = "MW" + week + ": ";
+
   if (!GUARDIAN_KEY) {
-    warnings.push(
+    warnOnce(
+      warnings,
       "GUARDIAN_KEY is not set, so no match report links. Add it as a repository " +
       "secret and pass it through in publish.yml."
     );
@@ -137,7 +149,7 @@ async function fetchReports(fromDate, toDate, warnings) {
     "&page-size=50&show-fields=headline" +
     "&api-key=" + GUARDIAN_KEY;
 
-  console.log("Guardian: searching match reports " + fromDate + " to " + toDate);
+  console.log(tag + "searching Guardian match reports " + fromDate + " to " + toDate);
 
   try {
     const res = await fetch(url);
@@ -148,18 +160,14 @@ async function fetchReports(fromDate, toDate, warnings) {
           : res.status === 429
           ? "daily quota reached"
           : res.statusText;
-      warnings.push("Guardian returned " + res.status + " (" + detail + ").");
-      console.warn("Guardian: HTTP " + res.status + " — " + detail);
+      warnOnce(warnings, "Guardian returned " + res.status + " (" + detail + ").");
+      console.warn(tag + "Guardian HTTP " + res.status + " — " + detail);
       return [];
     }
 
     const json = await res.json();
     const results = json.response && json.response.results ? json.response.results : [];
-    console.log("Guardian: " + results.length + " match reports returned.");
-
-    if (results.length === 0) {
-      warnings.push("Guardian returned no match reports for " + fromDate + "\u2013" + toDate + ".");
-    }
+    console.log(tag + results.length + " match reports returned.");
 
     return results.map(function (r) {
       return {
@@ -168,8 +176,8 @@ async function fetchReports(fromDate, toDate, warnings) {
       };
     });
   } catch (err) {
-    warnings.push("Guardian lookup failed: " + err.message);
-    console.warn("Guardian lookup skipped:", err.message);
+    warnOnce(warnings, "Guardian lookup failed: " + err.message);
+    console.warn(tag + "Guardian lookup skipped:", err.message);
     return [];
   }
 }
@@ -260,25 +268,43 @@ async function main() {
     };
   }
 
-  /* ---- last completed matchweek ---- */
+  /* ---- every completed matchweek, newest first ---- */
   let recap = null;
   try {
     const played = await api(BASE + "/matches?status=FINISHED");
     const finished = played.matches || [];
-    const lastWeek = finished.reduce(function (max, m) {
-      return Math.max(max, m.matchday || 0);
-    }, 0);
 
-    if (lastWeek > 0) {
-      const weekMatches = finished.filter(function (m) { return m.matchday === lastWeek; });
+    /* Group finished matches by matchday. */
+    const byWeek = {};
+    for (const m of finished) {
+      const wk = m.matchday || 0;
+      if (!wk) continue;
+      if (!byWeek[wk]) byWeek[wk] = [];
+      byWeek[wk].push(m);
+    }
+
+    const weekNumbers = Object.keys(byWeek)
+      .map(Number)
+      .sort(function (a, b) { return b - a; }); // newest first
+
+    const weeks = [];
+
+    for (const wk of weekNumbers) {
+      const weekMatches = byWeek[wk];
+
+      /* Skip any week in which none of the ten clubs played. */
+      const relevant = weekMatches.filter(function (m) {
+        return clubOwner[m.homeTeam.id] || clubOwner[m.awayTeam.id];
+      });
+      if (relevant.length === 0) continue;
+
       const dates = weekMatches.map(function (m) { return m.utcDate.slice(0, 10); }).sort();
-      const reports = await fetchReports(dates[0], dates[dates.length - 1], warnings);
+      const reports = await fetchReports(dates[0], dates[dates.length - 1], warnings, wk);
 
       const entries = [];
-      for (const m of weekMatches) {
+      for (const m of relevant) {
         const homeOwner = clubOwner[m.homeTeam.id];
         const awayOwner = clubOwner[m.awayTeam.id];
-        if (!homeOwner && !awayOwner) continue;
 
         const hg = m.score.fullTime.home;
         const ag = m.score.fullTime.away;
@@ -290,7 +316,7 @@ async function main() {
         });
 
         if (!report && reports.length) {
-          console.log("No report matched: " + homeShort + " v " + awayShort);
+          console.log("MW" + wk + " no report matched: " + homeShort + " v " + awayShort);
         }
 
         const pair = [[homeOwner, true], [awayOwner, false]];
@@ -319,7 +345,21 @@ async function main() {
       }
 
       entries.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
-      recap = { matchday: lastWeek, entries: entries, hasReports: reports.length > 0 };
+
+      /* Points each side earned in this week alone. */
+      const totals = { mine: 0, dads: 0 };
+      entries.forEach(function (e) { totals[e.side] += e.points; });
+
+      weeks.push({
+        matchday: wk,
+        entries: entries,
+        totals: totals,
+        hasReports: reports.length > 0
+      });
+    }
+
+    if (weeks.length) {
+      recap = { latest: weeks[0].matchday, weeks: weeks };
     }
   } catch (err) {
     warnings.push("Recaps unavailable: " + err.message);
