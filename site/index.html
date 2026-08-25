@@ -131,6 +131,35 @@
     font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;color:var(--muted);
   }
   .recap-text{margin:0;font-size:14.5px;line-height:1.55}
+
+  /* older weeks, collapsed */
+  .weekbox{border-top:1px solid var(--line)}
+  .weekbox:first-child{border-top:none}
+  .weekhead{
+    list-style:none;cursor:pointer;padding:15px 0;
+    display:flex;align-items:baseline;gap:10px;
+    font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:14px;
+  }
+  .weekhead::-webkit-details-marker{display:none}
+  .weekhead::marker{content:""}
+  .weekhead .arrow{
+    display:inline-block;color:var(--muted);font-size:11px;
+    transition:transform .2s ease;
+  }
+  .weekbox[open] .weekhead .arrow{transform:rotate(90deg)}
+  .weekhead .tally-small{
+    margin-left:auto;font-weight:600;font-size:13px;color:var(--muted);
+    font-variant-numeric:tabular-nums;letter-spacing:.04em;
+  }
+  .weekhead:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .weekbox .recap:last-child{border-bottom:none}
+  .olderhead{
+    font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    text-transform:uppercase;letter-spacing:.12em;font-weight:600;
+    font-size:12px;color:var(--muted);margin:34px 0 0;
+    padding-bottom:5px;border-bottom:1px solid var(--line);
+  }
   .recap-link{
     display:inline-block;margin-top:7px;font-size:13px;
     color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);
@@ -303,59 +332,106 @@ function render(data){
   document.getElementById("scoreboard").hidden = false;
 }
 
+function buildEntry(e, dayFmt){
+  var art = document.createElement("article");
+  art.className = "recap " + e.side;
+
+  var top = document.createElement("div");
+  top.className = "recap-top";
+
+  var club = document.createElement("span");
+  club.className = "recap-club";
+  club.textContent = e.club;
+  top.appendChild(club);
+
+  var pts = document.createElement("span");
+  pts.className = "recap-pts";
+  pts.textContent = "+" + e.points;
+  top.appendChild(pts);
+
+  art.appendChild(top);
+
+  var fix = document.createElement("span");
+  fix.className = "recap-fixture";
+  fix.textContent = e.fixture + " \u00B7 " + dayFmt.format(new Date(e.date));
+  art.appendChild(fix);
+
+  var p = document.createElement("p");
+  p.className = "recap-text";
+  p.textContent = e.summary;
+  art.appendChild(p);
+
+  if (e.reportUrl) {
+    var a = document.createElement("a");
+    a.className = "recap-link";
+    a.href = e.reportUrl;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = "Match report \u2192";
+    art.appendChild(a);
+  }
+
+  return art;
+}
+
 function renderRecap(recap){
-  if (!recap || !recap.entries || !recap.entries.length) return;
+  if (!recap || !recap.weeks || !recap.weeks.length) return;
 
   var dayFmt = new Intl.DateTimeFormat(undefined, { weekday:"short", day:"numeric", month:"short" });
   var list = document.getElementById("recapList");
   list.innerHTML = "";
 
-  text("recapHead", "Matchweek " + recap.matchday);
+  var weeks = recap.weeks;      // already newest-first
+  var current = weeks[0];
+  var older = weeks.slice(1);
+
+  /* Newest week: open, styled exactly as before. */
+  text("recapHead", "Matchweek " + current.matchday);
   text("recapNote", "What happened to the ten clubs. "
-    + (recap.hasReports ? "Follow a link for the full match report."
-                        : "Result summaries only."));
+    + (current.hasReports ? "Follow a link for the full match report."
+                          : "Result summaries only."));
 
-  recap.entries.forEach(function(e){
-    var art = document.createElement("article");
-    art.className = "recap " + e.side;
-
-    var top = document.createElement("div");
-    top.className = "recap-top";
-
-    var club = document.createElement("span");
-    club.className = "recap-club";
-    club.textContent = e.club;
-    top.appendChild(club);
-
-    var pts = document.createElement("span");
-    pts.className = "recap-pts";
-    pts.textContent = "+" + e.points;
-    top.appendChild(pts);
-
-    art.appendChild(top);
-
-    var fix = document.createElement("span");
-    fix.className = "recap-fixture";
-    fix.textContent = e.fixture + " \u00B7 " + dayFmt.format(new Date(e.date));
-    art.appendChild(fix);
-
-    var p = document.createElement("p");
-    p.className = "recap-text";
-    p.textContent = e.summary;
-    art.appendChild(p);
-
-    if (e.reportUrl) {
-      var a = document.createElement("a");
-      a.className = "recap-link";
-      a.href = e.reportUrl;
-      a.target = "_blank";
-      a.rel = "noopener";
-      a.textContent = "Match report \u2192";
-      art.appendChild(a);
-    }
-
-    list.appendChild(art);
+  current.entries.forEach(function(e){
+    list.appendChild(buildEntry(e, dayFmt));
   });
+
+  /* Older weeks only exist once a second matchweek has been played. */
+  if (older.length) {
+    var h = document.createElement("p");
+    h.className = "olderhead";
+    h.textContent = "Earlier matchweeks";
+    list.appendChild(h);
+
+    older.forEach(function(wk){
+      var box = document.createElement("details");
+      box.className = "weekbox";
+
+      var head = document.createElement("summary");
+      head.className = "weekhead";
+
+      var arrow = document.createElement("span");
+      arrow.className = "arrow";
+      arrow.textContent = "\u25B6";
+      head.appendChild(arrow);
+
+      var label = document.createElement("span");
+      label.textContent = "Matchweek " + wk.matchday;
+      head.appendChild(label);
+
+      var tally = document.createElement("span");
+      tally.className = "tally-small";
+      tally.textContent = wk.totals.mine + "\u2013" + wk.totals.dads;
+      head.appendChild(tally);
+
+      box.appendChild(head);
+
+      wk.entries.forEach(function(e){
+        box.appendChild(buildEntry(e, dayFmt));
+      });
+
+      list.appendChild(box);
+    });
+  }
 
   document.getElementById("recapWrap").hidden = false;
 }
