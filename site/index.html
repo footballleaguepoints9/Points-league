@@ -114,16 +114,20 @@
   }
   .recap.mine{border-left-color:var(--mine)}
   .recap.dads{border-left-color:var(--dads)}
-  .recap-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:5px}
+  .recap-top{display:flex;align-items:baseline;gap:10px;flex-wrap:nowrap;margin-bottom:2px}
   .recap-club{
     font-family:"Barlow Condensed",Arial Narrow,sans-serif;
     text-transform:uppercase;letter-spacing:.09em;font-weight:700;font-size:15px;
+    flex:1 1 auto;min-width:0;
   }
   .recap.mine .recap-club{color:var(--mine)}
   .recap.dads .recap-club{color:var(--dads)}
-  .recap-fixture{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .recap-fixture{
+    display:block;font-size:13px;color:var(--muted);
+    font-variant-numeric:tabular-nums;margin-bottom:6px;
+  }
   .recap-pts{
-    margin-left:auto;font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+    flex:0 0 auto;font-family:"Barlow Condensed",Arial Narrow,sans-serif;
     font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;color:var(--muted);
   }
   .recap-text{margin:0;font-size:14.5px;line-height:1.55}
@@ -323,17 +327,17 @@ function renderRecap(recap){
     club.textContent = e.club;
     top.appendChild(club);
 
-    var fix = document.createElement("span");
-    fix.className = "recap-fixture";
-    fix.textContent = e.fixture + " \u00B7 " + dayFmt.format(new Date(e.date));
-    top.appendChild(fix);
-
     var pts = document.createElement("span");
     pts.className = "recap-pts";
     pts.textContent = "+" + e.points;
     top.appendChild(pts);
 
     art.appendChild(top);
+
+    var fix = document.createElement("span");
+    fix.className = "recap-fixture";
+    fix.textContent = e.fixture + " \u00B7 " + dayFmt.format(new Date(e.date));
+    art.appendChild(fix);
 
     var p = document.createElement("p");
     p.className = "recap-text";
