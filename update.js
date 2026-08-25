@@ -56,21 +56,67 @@ async function api(url) {
 
 /* ---------- match reports (optional, needs a free Guardian key) ---------- */
 
-function nameKeys(clubName) {
-  const keys = [clubName];
-  for (const base of Object.keys(ALIASES)) {
-    if (clubName.toLowerCase().includes(base.toLowerCase())) {
-      keys.push(base);
-      for (const alias of ALIASES[base]) keys.push(alias);
-    }
-  }
-  return Array.from(new Set(keys));
+/* Club names arrive as full legal names ("Arsenal FC", "AFC Bournemouth").
+ * Newspapers never write them that way, so build a list of plausible forms. */
+
+/* Bare first words that would be ambiguous between two clubs. */
+const AMBIGUOUS = ["manchester", "sheffield", "bristol", "west", "north"];
+
+/* Trailing words that papers routinely drop ("Coventry City" -> "Coventry"). */
+const DROPPABLE = "United|City|Town|Albion|Hotspur|Wanderers|Rovers|Athletic|County|Forest";
+
+function stripCorporate(name) {
+  return name
+    .replace(/^A\.?F\.?C\.?\s+/i, "")
+    .replace(/\s+A\.?F\.?C\.?$/i, "")
+    .replace(/\s+F\.?C\.?$/i, "")
+    .trim();
 }
 
-function headlineMentions(headline, clubName) {
-  const h = headline.toLowerCase();
-  return nameKeys(clubName).some(function (k) {
-    return h.indexOf(k.toLowerCase()) !== -1;
+function nameKeys(team) {
+  const out = new Set();
+  const full = team.name || "";
+  const short = team.shortName || "";
+
+  [full, short].forEach(function (n) {
+    if (!n) return;
+    const base = stripCorporate(n);
+    if (base) out.add(base);
+
+    const m = base.match(new RegExp("^(.*?)\\s+(" + DROPPABLE + ")$", "i"));
+    if (m) {
+      const head = m[1].trim();
+      if (head.length >= 4 && AMBIGUOUS.indexOf(head.toLowerCase()) === -1) {
+        out.add(head);
+      }
+    }
+  });
+
+  Object.keys(ALIASES).forEach(function (base) {
+    if (full.toLowerCase().indexOf(base.toLowerCase()) !== -1) {
+      out.add(base);
+      ALIASES[base].forEach(function (a) { out.add(a); });
+    }
+  });
+
+  return Array.from(out);
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/* Match against the headline AND the article URL slug — Guardian match report
+ * URLs usually contain both club names, which is more reliable than a headline. */
+function mentions(report, team) {
+  const haystack = (
+    (report.headline || "") + " " + (report.url || "").replace(/[^a-z0-9]+/gi, " ")
+  ).toLowerCase();
+
+  return nameKeys(team).some(function (k) {
+    const norm = k.replace(/[^a-z0-9]+/gi, " ").trim().toLowerCase();
+    if (!norm) return false;
+    return new RegExp("\\b" + escapeRe(norm) + "\\b").test(haystack);
   });
 }
 
@@ -240,9 +286,12 @@ async function main() {
         const awayShort = m.awayTeam.shortName || m.awayTeam.name;
 
         const report = reports.find(function (r) {
-          return headlineMentions(r.headline, m.homeTeam.name) &&
-                 headlineMentions(r.headline, m.awayTeam.name);
+          return mentions(r, m.homeTeam) && mentions(r, m.awayTeam);
         });
+
+        if (!report && reports.length) {
+          console.log("No report matched: " + homeShort + " v " + awayShort);
+        }
 
         const pair = [[homeOwner, true], [awayOwner, false]];
         for (const item of pair) {
