@@ -74,19 +74,47 @@ function headlineMentions(headline, clubName) {
   });
 }
 
-async function fetchReports(fromDate, toDate) {
-  if (!GUARDIAN_KEY) return [];
+async function fetchReports(fromDate, toDate, warnings) {
+  if (!GUARDIAN_KEY) {
+    warnings.push(
+      "GUARDIAN_KEY is not set, so no match report links. Add it as a repository " +
+      "secret and pass it through in publish.yml."
+    );
+    console.log("Guardian: no key present — skipping report lookup.");
+    return [];
+  }
+
   const url =
     "https://content.guardianapis.com/search" +
     "?section=football&tag=tone/matchreports" +
     "&from-date=" + fromDate + "&to-date=" + toDate +
     "&page-size=50&show-fields=headline" +
     "&api-key=" + GUARDIAN_KEY;
+
+  console.log("Guardian: searching match reports " + fromDate + " to " + toDate);
+
   try {
     const res = await fetch(url);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const detail =
+        res.status === 401 || res.status === 403
+          ? "the key was rejected — check it was copied in full"
+          : res.status === 429
+          ? "daily quota reached"
+          : res.statusText;
+      warnings.push("Guardian returned " + res.status + " (" + detail + ").");
+      console.warn("Guardian: HTTP " + res.status + " — " + detail);
+      return [];
+    }
+
     const json = await res.json();
     const results = json.response && json.response.results ? json.response.results : [];
+    console.log("Guardian: " + results.length + " match reports returned.");
+
+    if (results.length === 0) {
+      warnings.push("Guardian returned no match reports for " + fromDate + "\u2013" + toDate + ".");
+    }
+
     return results.map(function (r) {
       return {
         headline: (r.fields && r.fields.headline) || r.webTitle || "",
@@ -94,6 +122,7 @@ async function fetchReports(fromDate, toDate) {
       };
     });
   } catch (err) {
+    warnings.push("Guardian lookup failed: " + err.message);
     console.warn("Guardian lookup skipped:", err.message);
     return [];
   }
@@ -197,7 +226,7 @@ async function main() {
     if (lastWeek > 0) {
       const weekMatches = finished.filter(function (m) { return m.matchday === lastWeek; });
       const dates = weekMatches.map(function (m) { return m.utcDate.slice(0, 10); }).sort();
-      const reports = await fetchReports(dates[0], dates[dates.length - 1]);
+      const reports = await fetchReports(dates[0], dates[dates.length - 1], warnings);
 
       const entries = [];
       for (const m of weekMatches) {
