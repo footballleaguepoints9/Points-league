@@ -47,6 +47,8 @@ jobs:
         with:
           path: site
 
+       GUARDIAN_KEY: ${{ secrets.GUARDIAN_KEY }}   
+
       - name: Publish
         id: deploy
         uses: actions/deploy-pages@v4
