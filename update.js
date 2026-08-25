@@ -382,9 +382,17 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, "standings.json"), JSON.stringify(output, null, 2));
 
+  let recapNote = "";
+  if (recap && recap.weeks && recap.weeks.length) {
+    const totalEntries = recap.weeks.reduce(function (n, w) { return n + w.entries.length; }, 0);
+    recapNote =
+      "\nRecap: " + recap.weeks.length + " matchweek(s), " +
+      totalEntries + " entries, latest is MW" + recap.latest;
+  }
+
   console.log(
     "Wrote standings.json \u2014 " + sides.mine.total + " to " + sides.dads.total +
-      (recap ? "\nRecap: matchweek " + recap.matchday + ", " + recap.entries.length + " entries" : "") +
+      recapNote +
       (warnings.length ? "\nWarnings:\n  " + warnings.join("\n  ") : "")
   );
 }
